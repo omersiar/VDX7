@@ -22,7 +22,10 @@
 #include <cstdint>
 #include <samplerate.h>
 
+#if HEADLESS
+#else
 #include "Message.h"
+#endif
 #include "dx7.h"
 
 class Synth {
@@ -61,12 +64,21 @@ public:
 	// FIX size this properly, 2x "should be" enough
 	float buffer[2*BufSize] = {0};
 	int fillBuffer(); // DX7 audio generator
+
+#if HEADLESS
+#else
 	void processMessage(Message msg); // Hand off events to DX7 CPU
+#endif
+	
 	SRC_STATE *src_state; // libsamplerate state variable
 
 	// Communication interfaces (Lock-Free Queues)
+#if HEADLESS
+	ToSynth *toSynth; // local
+#else
 	ToSynth *toSynth; // local
 	ToGui *toGui; // remote
+#endif
 
 	// Master volume slider
 	float volume = pow(2.0,0.75)-1.0; // = 0.68 (matches to initial GUI volume ctrl)

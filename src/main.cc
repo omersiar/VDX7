@@ -24,10 +24,14 @@
 #include "Synth.h"
 #include "JackDriver.h"
 
-#if GTKMM
-#include "Gui-gtkmm.h"
+#if HEADLESS
+
 #else
-#include "Gui.h"
+	#if GTKMM
+	#include "Gui-gtkmm.h"
+	#else
+	#include "Gui.h"
+	#endif
 #endif
 
 
@@ -205,13 +209,17 @@ int main(int argc, char* argv[]) {
 		if(err>=0) savefile = filename.c_str();
 	}
 
+	DX7Synth synth(savefile);
+#if HEADLESS
+
+#else
 	// Interthread communication
 	App_ToSynth toSynth;
 	App_ToGui toGui;
-	
-	DX7Synth synth(savefile);
 	synth.toGui = &toGui;
 	synth.toSynth = &toSynth;
+#endif
+	
 	if(romfile) synth.dx7.loadROM(romfile);
 	synth.start();
 
@@ -257,7 +265,9 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "Can't open %s\n", port);
 		return(err);
 	}
+#if HEADLESS
 
+#else
 	// Set up GUI
 #if GTKMM
 	auto app = Gtk::Application::create();
@@ -284,5 +294,6 @@ int main(int argc, char* argv[]) {
 	// Launch GUI thread
 	std::thread tgui(&DX7GUI::run, &gui);
 	tgui.join(); // Clean up
+#endif
 #endif
 }

@@ -49,8 +49,10 @@ private:
 
 	bool fineAdjust = false; // Ctrl key enables wheel to change control +/- 1
 
+#if HEADLESS
+#else
 	bool showKeyboard = true;
-
+#endif
 	//Display* display;
 	Visual* visual;
 	//Window panel;

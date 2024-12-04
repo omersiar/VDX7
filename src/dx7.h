@@ -60,14 +60,23 @@ template <class T, int N> struct Buffer {
 
 // DX7 hardware emulation
 struct DX7: public HD6303R {
+#if HEADLESS
+	DX7(ToSynth*& ts, const char *ramfile=0);
+#else
 	DX7(ToSynth*& ts, ToGui*& tg, const char *ramfile=0);
+#endif
 	~DX7();
 	void start();
 	void run(); // Execute one instruction and update peripherals
 
 	// References set to refer back to Synth's communication pointers
+#if HEADLESS
+	ToSynth*& toSynth;
+#else
 	ToSynth*& toSynth;
 	ToGui*& toGui;
+#endif
+
 
 	// Initialize internal or cartridge patch memory to factory cartridge 0-7
 	void setBank(int n, bool cart = false);

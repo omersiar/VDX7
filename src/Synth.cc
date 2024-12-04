@@ -23,7 +23,11 @@
 
 #include "Synth.h"
 
-DX7Synth::DX7Synth(const char* rf) : dx7(toSynth, toGui, rf) {
+#if HEADLESS
+	DX7Synth::DX7Synth(const char* rf) : dx7(toSynth, rf) {
+#else
+	DX7Synth::DX7Synth(const char* rf) : dx7(toSynth, toGui, rf) {
+#endif
 
 	setMidiVelocity(0.4);
 
@@ -50,7 +54,8 @@ fprintf(stderr, "Sample Rate = %.0f\n", fs);
 	fprintf(stderr, "cpuCyclesPerBuf = %f\n", cpuCyclesPerBuf);
 	dx7.midiFilter.set_f(10.6/fs);
 }
-
+#if HEADLESS
+#else
 // Process event messages, handing off to CPU
 void DX7Synth::processMessage(Message msg) {
 	switch(Message::CtrlID(msg.byte1)) {
@@ -121,6 +126,7 @@ void DX7Synth::processMessage(Message msg) {
 	}
 //fprintf(stderr, "msg: %02X(%d) %02X(%d)\n", msg.byte1, msg.byte1, msg.byte2, msg.byte2);
 }
+#endif
 
 int DX7Synth::fillBuffer() {
 	// Sync DX7 CPU clock to Jack sampling rate
@@ -134,11 +140,19 @@ int DX7Synth::fillBuffer() {
 	// hence need to rate adapt to match Jack sample rate
 	cyc_count += cpuCyclesPerBuf;
 	int outCnt = 0;
+#if HEADLESS
+#else
 	Message msg;
+#endif
+	
 	while(cyc_count > 0) {
+#if HEADLESS
+#else
 		// Process messages
 		if(!dx7.haveMsg) // CPU is ready
 			if(toSynth->pop(msg)) processMessage(msg);
+
+#endif
 
 		// Run one instruction
 		dx7.run();

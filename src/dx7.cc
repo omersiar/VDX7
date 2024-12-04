@@ -18,8 +18,13 @@
 
 #include "dx7.h"
 
+#if HEADLESS
+DX7::DX7(ToSynth*& ts, const char *rf)
+	: toSynth(ts), ramfile(rf) {
+#else
 DX7::DX7(ToSynth*& ts, ToGui*& tg, const char *rf)
 	: toSynth(ts), toGui(tg), ramfile(rf) {
+#endif
 	// Load ROM
 	const uint8_t *rom = _binary_firmware_bin_start;
 	for(int addr = 0xC000; addr<0x10000; addr++) memory[addr] = *rom++;

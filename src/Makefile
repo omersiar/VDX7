@@ -31,9 +31,10 @@
 ##### Configuration options: #####
 ##################################
 USE_NATIVE=0
-USE_LV2=1
+USE_LV2=0
 USE_ARM=0
 USE_GTKMM=0
+HEADLESS=1
 ##################################
 
 APP=vdx7
@@ -76,10 +77,14 @@ CC=gcc
 ############ Sources #############
 ##################################
 
-ifeq ($(USE_GTKMM),1)
-GUI_CC=GTK/Gui-gtkmm.cc GTK/resources.c
+ifeq ($(HEADLESS),0)
+	ifeq ($(USE_GTKMM),1)
+	GUI_CC=GTK/Gui-gtkmm.cc GTK/resources.c
+	else
+	GUI_CC=Gui.cc Widgets.cc
+	endif
 else
-GUI_CC=Gui.cc Widgets.cc
+GUI_CC=
 endif
 
 COMMON_SRCS = Synth.cc HD6303R.cc HD6303R_inst.cc dx7.cc firmware.bin voices.bin
@@ -99,6 +104,10 @@ CPPFLAGS=
 CFLAGS+= -g -O3 -Wall -pipe
 CFLAGS+= -fomit-frame-pointer 
 CFLAGS+= -ffast-math -fno-finite-math-only
+
+ifeq ($(HEADLESS),1)
+CFLAGS+= -DHEADLESS=1
+endif
 
 ifeq ($(USE_NATIVE),1)
 	CFLAGS+= -march=native
@@ -125,10 +134,14 @@ CFLAGS+= -fPIC -DPIC
 LV2_CFLAGS= -fvisibility=hidden -Wl,-Bstatic -Wl,-Bdynamic -Wl,--as-needed \
 	-shared `pkg-config --cflags lv2`
 
-ifeq ($(USE_GTKMM),1)
-CFLAGS+= -IGTK `pkg-config --cflags gtkmm-3.0` -DGTKMM=1
+ifeq ($(HEADLESS),1)
+
 else
-CFLAGS+= -DGTKMM=0
+	ifeq ($(USE_GTKMM),1)
+	CFLAGS+= -IGTK `pkg-config --cflags gtkmm-3.0` -DGTKMM=1
+	else
+	CFLAGS+= -DGTKMM=0
+	endif
 endif
 
 CXXFLAGS += $(CFLAGS)
@@ -144,10 +157,14 @@ LDFLAGS+= -lpthread
 # Allow app to execute from Nemo, grrr...  :-(
 #LDFLAGS+= -no-pie
 
-ifeq ($(USE_GTKMM),1)
-LDFLAGS+= `pkg-config --libs gtkmm-3.0`
+ifeq ($(HEADLESS),1)
+LDFLAGS+= -lXpm
 else
-LDFLAGS+= -lX11 -lXpm
+	ifeq ($(USE_GTKMM),1)
+	LDFLAGS+= `pkg-config --libs gtkmm-3.0`
+	else
+	LDFLAGS+= -lX11 -lXpm
+	endif
 endif
 
 
@@ -234,10 +251,13 @@ install-app:
 
 install-lv2: $(MANIFEST) $(LV2_EXEC)
 	@$(MKDIR_P) $(INSTALLDIR_LV2)
-ifeq ($(USE_GTKMM),1)
-	@sed 's/@TYPE@/Gtk3UI/' manifest.ttl.in > manifest.ttl
+ifeq ($(HEADLESS),1)
 else
-	@sed 's/@TYPE@/X11UI/' manifest.ttl.in > manifest.ttl
+	ifeq ($(USE_GTKMM),1)
+		@sed 's/@TYPE@/Gtk3UI/' manifest.ttl.in > manifest.ttl
+	else
+		@sed 's/@TYPE@/X11UI/' manifest.ttl.in > manifest.ttl
+	endif
 endif
 	cp $(MANIFEST) $(LV2_EXEC) $(INSTALLDIR_LV2)
 	if ! test -f $(INSTALLDIR_LV2)/vdx7.ram ; then cp example.ram $(INSTALLDIR_LV2)/vdx7.ram ; fi
