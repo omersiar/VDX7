@@ -20,7 +20,7 @@
 
 #include <cstdio>
 #include <cstdint>
-#include <samplerate.h>
+//#include <samplerate.h>
 
 #include "Message.h"
 #include "dx7.h"
@@ -63,7 +63,7 @@ public:
 	float buffer[2*BufSize] = {0};
 	int fillBuffer(); // DX7 audio generator
 	void processMessage(Message msg); // Hand off events to DX7 CPU
-	SRC_STATE *src_state; // libsamplerate state variable
+	//SRC_STATE *src_state; // libsamplerate state variable
 
 	// Communication interfaces (Lock-Free Queues)
 	ToSynth *toSynth; // local
@@ -101,11 +101,11 @@ public:
 	uint8_t midibuf[maxSysex];
 	uint32_t size = 0; // track midi msg size
 
-	// Callback for libsamplerate
+	/*// Callback for libsamplerate
 	static long fillCallback(void *cb_data, float **audio) {
 		DX7Synth *me = (DX7Synth*)cb_data;
 		*audio = me->buffer;
 		return me->fillBuffer();
-	}
+	}*/
 };
 

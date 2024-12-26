@@ -138,7 +138,7 @@ CXXFLAGS += $(CFLAGS)
 ##################################
 
 LDFLAGS= -lm
-LDFLAGS+= -lsamplerate
+#LDFLAGS+= -lsamplerate
 LDFLAGS+= -lpthread
 
 # Allow app to execute from Nemo, grrr...  :-(

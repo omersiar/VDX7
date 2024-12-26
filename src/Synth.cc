@@ -26,7 +26,7 @@
 DX7Synth::DX7Synth(const char* rf) : dx7(toSynth, toGui, rf) {
 
 	setMidiVelocity(0.4);
-
+	/*
 	// Set up libsamplerate converter callback
 	int error;
 	if (!(src_state = src_callback_new(
@@ -39,6 +39,7 @@ DX7Synth::DX7Synth(const char* rf) : dx7(toSynth, toGui, rf) {
 		fprintf(stderr, "src_callback_new failed: %s\n", src_strerror (error));
 		throw("libsamplerate");
 	}
+	*/
 }
 
 void DX7Synth::setSampleRate(double fs) {
@@ -155,7 +156,8 @@ int DX7Synth::fillBuffer() {
 // Produces one BufSize buffer of output
 void DX7Synth::run() {
 	// Audio
-	int rc = src_callback_read(src_state, ratio, BufSize, outputBuffer);
+	//int rc = src_callback_read(src_state, ratio, BufSize, outputBuffer);
+	int rc = fillBuffer();
 	if (rc < BufSize) {
 		fprintf(stderr, "src_callback_read: short output (%d != %d)\n", rc, BufSize);
 		return;
