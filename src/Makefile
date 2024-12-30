@@ -30,9 +30,9 @@
 ##################################
 ##### Configuration options: #####
 ##################################
-USE_NATIVE=0
-USE_LV2=1
-USE_ARM=0
+USE_NATIVE=1
+USE_LV2=0
+USE_ARM=1
 USE_GTKMM=0
 ##################################
 
@@ -66,8 +66,8 @@ SSE= -msse -msse2 -mfpmath=sse
 #SSE+= -ftree-vectorize -funsafe-math-optimizations
 
 NEON= -mcpu=cortex-a53
-NEON+= -mfpu=neon-vfpv4
-#NEON+= -ftree-vectorize -funsafe-math-optimizations
+NEON+= -mfpu=neon -funroll-loops
+NEON+= -ftree-vectorize -funsafe-math-optimizations
 
 CXX=g++
 CC=gcc

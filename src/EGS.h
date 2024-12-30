@@ -19,6 +19,7 @@
 #pragma once
 #include <cstdint>
 #include <cstdio>
+#include <arm_neon.h>
 
 // Force G++ to inline EGS and OPS clock functions
 #ifdef INLINE_EGS
@@ -70,30 +71,31 @@ struct Envelope {
 
 	// Output is a 12 bit attenuation (i.e. inverted, 0xFFF is "zero")
 	uint16_t getsample() {
-		if (stage>1 && (level == target)) return level;  // short circuit if target reached
-		if ((!(*clock & small)) // fall thru once every 2^nshift cycles
-			&& (mask & (1<<((*clock>>nshift)&7))) // Clock out fractional qrates
-			) {
-			if (rising) { // "rising" down
-				if (level>0x94C) level = 0x94C; // jumpstart: 4096-1716=2380=0x94C
-				int slope = (level>>8) + 2; // 11 to 2 by log(level)
-				level -= slope<<pshift;
+	    static const int16_t slope_lookup[] = {11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 2};
+
+	    if (stage > 1 && (level == target)) return level;  // short circuit if target reached
+
+	    if ((!(*clock & small)) && (mask & (1 << ((*clock >> nshift) & 7)))) {
+	        if (rising) {  // "rising" down
+	            if (level > 0x94C) level = 0x94C;  // jumpstart: 4096-1716=2380=0x94C
+	            int slope = slope_lookup[level >> 8];
+	            level -= slope << pshift;
 				// NB level can't actually underflow due to
 				// firmware capping outparam at 0x04. This (signed) code should work
 				// even if outparam is not capped (the actual hardware would glitch)
-				if (level <= target) { // go to next stage
-					level = target;
-					advance();
-				}
-			} else { // "falling" up 
-				level += 1<<pshift;
-				if (level >= target) { // go to next stage
-					level = target;
-					advance();
-				}
-			}
-		}
-		return level; // stage 2 sustained
+	            if (level <= target) {  // go to next stage
+	                level = target;
+	                advance();
+	            }
+	        } else {  // "falling" up
+	            level += 1 << pshift;
+	            if (level >= target) {  // go to next stage
+	                level = target;
+	                advance();
+	            }
+	        }
+	    }
+	    return level;  // stage 2 sustained
 	}
 
 	void advance() {
@@ -215,15 +217,35 @@ private:
 	// Introduces a bit of aliasing noise consistent with hardware synth
 	Filter skFilter;
 	float filter(int32_t *out) {
-		float ret = 0;
-		// Gain trim for 15 bit full scale
-		constexpr const float cgain = 1.0/float(1<<15);
-		constexpr const float gain = 16.0/float(1<<15);
+	    float ret = 0;
+	    // Gain trim for 15 bit full scale
+	    constexpr const float cgain = 1.0/float(1<<15);
+	    constexpr const float gain = 16.0/float(1<<15);
 		// Optionally no filtering or decimation
 		// Otherwise, apply S-K filter as in hardware
-		if(clean_) for(int v=0; v<16; v++) ret += cgain * out[v];
-		else for(int v=0; v<16; v++) ret = skFilter.operate(gain * out[v]);
-		return ret;
+	    if(clean_) for(int v=0; v<16; v++) ret += cgain * out[v]; 
+	    } else {
+	        // Use NEON to process multiple samples at once
+	        float32x4_t ret_vec = vdupq_n_f32(0.0f);
+	        float32x4_t gain_vec = vdupq_n_f32(gain);
+	
+	        for (int v = 0; v < 16; v += 4) {
+	            // Load 4 samples into NEON register
+	            int32x4_t out_vec = vld1q_s32(&out[v]);
+	            float32x4_t out_float_vec = vcvtq_f32_s32(out_vec);
+	            // Apply gain
+	            out_float_vec = vmulq_f32(out_float_vec, gain_vec);
+	            // Apply S-K filter (example, replace with actual filter operation)
+	            out_float_vec = skFilter.operate(out_float_vec);
+	            // Accumulate results
+	            ret_vec = vaddq_f32(ret_vec, out_float_vec);
+	        }
+	
+	        // Sum the vector elements into a single float
+	        ret = vaddvq_f32(ret_vec) * cgain;
+	    }
+	
+	    return ret;
 	}
 
 	bool clean_ = false;

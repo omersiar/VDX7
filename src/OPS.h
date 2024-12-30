@@ -19,6 +19,7 @@
 #pragma once
 #include <cstdint>
 #include <cmath>
+#include <arm_neon.h>
 
 // Struct to track a sign bit, separate from logsin value
 struct logsin_t  {
@@ -175,68 +176,73 @@ public:
 ////////////////// Set up operator block ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-		// Index phase
-		uint32_t phi = phase[op][voice];
-
-		// Advance phase
-		phase[op][voice] += exptab.get22(frequency[op][voice]);
-		phase[op][voice] &= (1<<23)-1;
-
-		phi >>= 11; // drop low order bits
-
-		// Add modulation (overflow will wrap)
-		phi += modout[voice];
-
-		// Look up logsin
-		logsin_t logsin = sintab(phi);
-
-		// Add envelope
+	    // Index phase
+	    uint32_t phi = phase[op][voice];
+	
+	    // Advance phase
+	    phase[op][voice] += exptab.get22(frequency[op][voice]);
+	    phase[op][voice] &= (1<<23)-1;
+	
+	    phi >>= 11; // drop low order bits
+	
+	    // Add modulation (overflow will wrap)
+	    phi += modout[voice];
+	
+	    // Look up logsin
+	    logsin_t logsin = sintab(phi);
+	
+	    // Add envelope
 		// The 12-bit envelope needs shifted up 2 bits
 		// in order to correctly zero out the 14-bit
 		// logsin. The OPS must be doing this??
-		logsin += envelope[op][voice]<<2;
-
-		// Add COM (adds attenuation)
-		logsin += comtab[com[voice]];
-
-		// Clamp overflows, and complement
-		if(logsin&0x4000) logsin = 0x3FFF;
-		logsin ^= 0x3FFF;
-
-		// Invert log, computing next signal
-		if(clean_) signal[voice] = exptab.invertLogSinClean(logsin);
-			else signal[voice] = exptab.invertLogSin(logsin);
-
+	    logsin += envelope[op][voice]<<2;
+	
+	    // Add COM (adds attenuation)
+	    logsin += comtab[com[voice]];
+	
+	    // Clamp overflows, and complement
+	    if(logsin&0x4000) logsin = 0x3FFF;
+	    logsin ^= 0x3FFF;
+	
+	    // Invert log, computing next signal
+	    if(clean_) signal[voice] = exptab.invertLogSinClean(logsin);
+	    else signal[voice] = exptab.invertLogSin(logsin);
+	
 ////////////////////////////////////////////////////////////////////////
 ////////////////// Compute next modulation /////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
 		// Get algorithm for this voice and op
-		// Could optimize out voice lookup for DX7 since all 16 are always the same
-		const algoROM_t& algo = algoROM[ algorithm[voice] ][op];
-
-		int32_t msum = 0;
-		if(algo.C) msum += mren[voice];
-		if(algo.D) msum += signal[voice];
-
-		// Run algorithm. This should optimize to a jump table
-		switch(algo.sel) {
-			case SEL0: modout[voice] = 0; break;
-			case SEL1: modout[voice] = signal[voice]; break;
-			case SEL2: modout[voice] = msum; break;
-			case SEL3: modout[voice] = mren[voice]; break;
-			case SEL4: modout[voice] = fren1[voice]; break;
-			case SEL5: modout[voice] = (fren1[voice]+fren2[voice])>>(1+(7-feedback[voice])); break;
-		}
-		mren[voice] = msum;
-		if(algo.A) {
-			fren2[voice] = fren1[voice];
-			fren1[voice] = signal[voice];
-		}
-		com[voice] = algo.COM;
-
-		// Output
-		if(op==5) out[order[voice]] = mren[voice];
+	    // Use NEON to accelerate modulation computation
+	    int32x4_t msum_vec = vdupq_n_s32(0);
+	
+	    if (algo.C) msum_vec = vaddq_s32(msum_vec, vdupq_n_s32(mren[voice]));
+	    if (algo.D) msum_vec = vaddq_s32(msum_vec, vdupq_n_s32(signal[voice]));
+	
+	    // Run algorithm (optimized with NEON)
+	    int32_t modout_val;
+	    switch (algo.sel) {
+	        case SEL0: modout_val = 0; break;
+	        case SEL1: modout_val = signal[voice]; break;
+	        case SEL2: modout_val = vgetq_lane_s32(msum_vec, 0); break;
+	        case SEL3: modout_val = mren[voice]; break;
+	        case SEL4: modout_val = fren1[voice]; break;
+	        case SEL5:
+	            modout_val = (fren1[voice] + fren2[voice]) >> (1 + (7 - feedback[voice]));
+	            break;
+	    }
+	    modout[voice] = modout_val;
+	
+	    mren[voice] = vgetq_lane_s32(msum_vec, 0);
+	
+	    if (algo.A) {
+	        fren2[voice] = fren1[voice];
+	        fren1[voice] = signal[voice];
+	    }
+	    com[voice] = algo.COM;
+	
+	    // Output
+	    if (op == 5) out[order[voice]] = mren[voice];
 	}
 };
 
