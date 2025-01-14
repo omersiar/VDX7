@@ -27,6 +27,10 @@
 #define INLINE
 #endif
 
+#include "hwy/highway.h"
+HWY_BEFORE_NAMESPACE();
+namespace hn = hwy::HWY_NAMESPACE;
+
 #include "OPS.h"
 #include "filter.h"
 
@@ -242,36 +246,36 @@ public:
 	// at DX7 native SR 49.096khz
 	// Returns output samples in outbuf and increments buffer index count
 	void INLINE clock(float* outbuf, int &count, int cycles) {
-		for(int i=0; i<cycles; i++) {
+	  	const HWY_FULL(uint16_t) d; // Define SIMD type for uint16_t
+	  	for(int i=0; i<cycles; i++) {
+	  	  	// Load current envelope levels
+	  	  		auto e = Load(d, &env[currOp][currVoice].level);
 
-			// Advance envelope
-			uint16_t e = env[currOp][currVoice].getsample();
+	  	  			// Amplitude modulation
+	  	  		int ampModSens = (opSensScale[currOp] >> 3);
+	  	  		if (ampModSens) {
+	  	  		  	e += Set(d, ampMod << ampModSens); // Apply modulation
+	  	  	}
 
-			// Amplitude modulation
-			int ampModSens = (opSensScale[currOp]>>3);
+	  	  	// Clamp envelope values
+	  	  	e = Min(e, Set(d, 0xFFF));
+	  	  	Store(e, d, &envelope[currOp][currVoice]);
 
-			// Based on comparison to an audio track in Massey's book,
-			// amp mode sensitivity shifts the ampmod value as follows:
-			if(ampModSens) e += ampMod<<ampModSens; // No modulation when ampModSens==0
+	  	  	// Run OPS
+	  	  	ops.clock(currOp, currVoice);
 
-			if(e>0xFFF) e = 0xFFF;
-			envelope[currOp][currVoice] = e;
-
-			// Run OPS
-			ops.clock(currOp, currVoice);
-
-			// Increment voice and op
-			if(++currVoice == 16) {
-				currVoice = 0;
-				if(++currOp == 6) {
-					// Output after all 16x6 ops are computed
-					// Apply S-K filter and decimate
-					outbuf[count++] = filter(ops.out);
-					currOp = 0;
-					env_clock++; // increment envelope clock
-				}
-			}
-		}
+	  	  	// Increment voice and op
+	  	  	if (++currVoice == 16) {
+	  	  	  	currVoice = 0;
+	  	  	  	if (++currOp == 6) {
+	  	  	  	  // Output after all 16x6 ops are computed
+	  	  	  	  // Apply S-K filter and decimate
+	  	  	  	  outbuf[count++] = filter(ops.out);
+	  	  	  	  currOp = 0;
+	  	  	  	  env_clock++; // Increment envelope clock
+	  	  	  	}
+	  	  	}
+	  	}
 	}
 
 	// When CPU writes to 0x30**, Update EGS 2 byte pitch registers (need to be swabbed and atomic)
